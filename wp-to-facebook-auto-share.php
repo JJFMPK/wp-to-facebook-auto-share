@@ -1,41 +1,117 @@
 <?php
 /*
-Plugin Name: WP to Facebook Auto Share
-Description: نئی پوسٹ پبلش ہوتے ہی خودکار طور پر فیس بک پیج پر شیئر کرے۔
+Plugin Name: WP Auto Share to Facebook
+Plugin URI: https://yourwebsite.com
+Description: Automatically shares WordPress posts to your Facebook Page.
 Version: 1.0
-Author: آپ کا نام
+Author: Your Name
+Author URI: https://yourwebsite.com
+License: GPL2
 */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly
+}
 
-// جب نئی پوسٹ پبلش ہو
-add_action('publish_post', 'wp_fb_auto_share');
+/**
+ * Add settings menu
+ */
+add_action('admin_menu', 'wpas_add_menu');
+function wpas_add_menu() {
+    add_options_page(
+        'WP Auto Share Settings',
+        'WP Auto Share',
+        'manage_options',
+        'wp-auto-share',
+        'wpas_settings_page'
+    );
+}
 
-function wp_fb_auto_share($post_ID) {
-    
-    // پوسٹ کا ڈیٹا لیں
-    $post = get_post($post_ID);
-    $title = $post->post_title;
-    $link  = get_permalink($post_ID);
+/**
+ * Register settings
+ */
+add_action('admin_init', 'wpas_register_settings');
+function wpas_register_settings() {
+    register_setting('wpas_settings_group', 'wpas_fb_page_id', ['sanitize_callback' => 'sanitize_text_field']);
+    register_setting('wpas_settings_group', 'wpas_fb_access_token', ['sanitize_callback' => 'sanitize_text_field']);
+}
 
-    // فیس بک API ڈیٹا
-    $page_id       = "YOUR_PAGE_ID"; // یہاں اپنا پیج آئی ڈی ڈالیں
-    $access_token  = "YOUR_LONG_LIVED_PAGE_ACCESS_TOKEN"; // یہاں ٹوکن ڈالیں
-    $fb_api_url    = "https://graph.facebook.com/$page_id/feed";
+/**
+ * Settings page HTML
+ */
+function wpas_settings_page() {
+    ?>
+    <div class="wrap">
+        <h1>WP Auto Share Settings</h1>
+        <form method="post" action="options.php">
+            <?php
+            settings_fields('wpas_settings_group');
+            do_settings_sections('wpas_settings_group');
+            ?>
+            <table class="form-table">
+                <tr valign="top">
+                    <th scope="row">Facebook Page ID</th>
+                    <td>
+                        <input type="text" name="wpas_fb_page_id" 
+                               value="<?php echo esc_attr(get_option('wpas_fb_page_id')); ?>" 
+                               style="width: 400px;" />
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Facebook Access Token</th>
+                    <td>
+                        <input type="text" name="wpas_fb_access_token" 
+                               value="<?php echo esc_attr(get_option('wpas_fb_access_token')); ?>" 
+                               style="width: 400px;" />
+                        <p class="description">⚠️ Enter your Page Access Token (Long-Lived preferred).</p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(); ?>
+        </form>
+    </div>
+    <?php
+}
 
-    // پیغام تیار کریں
-    $message = $title . " 🔗 " . $link;
+/**
+ * Post to Facebook when publishing
+ */
+add_action('publish_post', 'wpas_share_to_facebook', 10, 2);
+function wpas_share_to_facebook($post_ID, $post) {
+    $page_id = get_option('wpas_fb_page_id');
+    $access_token = get_option('wpas_fb_access_token');
 
-    // ڈیٹا بھیجیں
-    $response = wp_remote_post($fb_api_url, array(
-        'body' => array(
-            'message'      => $message,
-            'access_token' => $access_token
-        )
-    ));
-
-    // ایرر لاگ کریں (اگر کوئی مسئلہ آئے)
-    if (is_wp_error($response)) {
-        error_log("Facebook Auto Share Error: " . $response->get_error_message());
+    if (!$page_id || !$access_token) {
+        return;
     }
+
+    $message = get_the_title($post_ID);
+    $link = get_permalink($post_ID);
+
+    $url = "https://graph.facebook.com/{$page_id}/feed";
+
+    $data = [
+        'message' => $message,
+        'link' => $link,
+        'access_token' => $access_token
+    ];
+
+    $options = [
+        'http' => [
+            'method'  => 'POST',
+            'content' => http_build_query($data),
+            'header'  => "Content-Type: application/x-www-form-urlencoded\r\n"
+        ]
+    ];
+
+    $context  = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+
+    if ($result === FALSE) {
+        error_log("WP Auto Share: Failed to post to Facebook for Post ID {$post_ID}");
+    } else {
+        error_log("WP Auto Share: Successfully posted Post ID {$post_ID} to Facebook.");
+    }
+
+    return $result;
 }
