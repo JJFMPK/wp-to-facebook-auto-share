@@ -2,10 +2,10 @@
 /*
 Plugin Name: WP Auto Share to Facebook
 Plugin URI: https://yourwebsite.com
-Description: Automatically shares WordPress posts to your Facebook Page.
-Version: 1.0
-Author: Mansoor Mehdi
-Author URI: https://github.com/JJFMPK
+Description: Automatically shares WordPress posts (Title + Link + Featured Image if available) to your Facebook Page.
+Version: 1.2
+Author: JJFMPK
+Author URI: https://yourwebsite.com
 License: GPL2
 */
 
@@ -74,7 +74,7 @@ function wpas_settings_page() {
 }
 
 /**
- * Post to Facebook when publishing
+ * Share post to Facebook (with fallback if no featured image)
  */
 add_action('publish_post', 'wpas_share_to_facebook', 10, 2);
 function wpas_share_to_facebook($post_ID, $post) {
@@ -85,16 +85,26 @@ function wpas_share_to_facebook($post_ID, $post) {
         return;
     }
 
-    $message = get_the_title($post_ID);
-    $link = get_permalink($post_ID);
+    $title = get_the_title($post_ID);
+    $link  = get_permalink($post_ID);
+    $image_url = get_the_post_thumbnail_url($post_ID, 'full');
 
-    $url = "https://graph.facebook.com/{$page_id}/feed";
-
-    $data = [
-        'message' => $message,
-        'link' => $link,
-        'access_token' => $access_token
-    ];
+    if ($image_url) {
+        // اگر فیچرڈ امیج ہے → امیج اپلوڈ کریں
+        $url = "https://graph.facebook.com/{$page_id}/photos";
+        $data = [
+            'url'          => $image_url,
+            'caption'      => $title . "\n\n" . $link,
+            'access_token' => $access_token
+        ];
+    } else {
+        // اگر امیج نہیں ہے → صرف ٹائٹل + لنک شئیر کریں
+        $url = "https://graph.facebook.com/{$page_id}/feed";
+        $data = [
+            'message'      => $title . "\n\n" . $link,
+            'access_token' => $access_token
+        ];
+    }
 
     $options = [
         'http' => [
