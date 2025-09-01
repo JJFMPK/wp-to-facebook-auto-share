@@ -4,8 +4,8 @@ Plugin Name: WP Auto Share to Facebook
 Plugin URI: https://yourwebsite.com
 Description: Automatically shares WordPress posts to your Facebook Page.
 Version: 1.0
-Author: Your Name
-Author URI: https://yourwebsite.com
+Author: Mansoor Mehdi
+Author URI: https://github.com/JJFMPK
 License: GPL2
 */
 
